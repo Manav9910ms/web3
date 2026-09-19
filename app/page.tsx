@@ -1,9 +1,8 @@
 import { Storefront } from "../components/Storefront";
-import { getCatalog, publicProduct } from "../lib/server-catalog";
+import { demoProducts } from "../lib/demo-products";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-static";
 
-export default async function HomePage() {
-  const products = (await getCatalog()).map(publicProduct);
-  return <Storefront products={products} />;
+export default function HomePage() {
+  return <Storefront products={demoProducts} />;
 }

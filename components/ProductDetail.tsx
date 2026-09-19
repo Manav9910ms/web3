@@ -10,8 +10,9 @@ export function ProductDetail({product}:{product:Product}){
   const [quantity,setQuantity]=useState(1);
   const {addItem}=useCart();
   const art=artByCategory[product.category]||"🛍️";
+  const background=product.images?.[0] ? {backgroundImage:"url(" + product.images[0] + ")"} : undefined;
   return <div className="product-detail">
-    <div className="product-large-art">{art}</div>
+    <div className={"product-large-art "+(product.images?.[0]?"has-image":"")} style={background}>{!product.images?.[0]&&art}</div>
     <div className="product-info">
       <div className="info-row"><span className="badge">{product.category}</span>{product.sourceType==="resell"&&<span className="badge badge-brand">Curated pick</span>}</div>
       <h1>{product.name}</h1>

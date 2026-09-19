@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductDetail } from "../../../components/ProductDetail";
-import { getProductBySlug } from "../../../lib/server-catalog";
+import { getProductBySlug, publicProduct } from "../../../lib/server-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     <div className="product-page">
       <div className="container">
         <p><Link href="/">← Back to shop</Link></p>
-        <ProductDetail product={product} />
+        <ProductDetail product={publicProduct(product)} />
       </div>
     </div>
   );

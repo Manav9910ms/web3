@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { getAdminDb } from "../../../../lib/firebase-admin";
+import { releaseInventory } from "../../../../lib/inventory";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,8 @@ export async function POST(request: Request) {
     if (snapshot.empty) return NextResponse.json({ ok: true });
 
     const orderRef = snapshot.docs[0].ref;
+    const internalOrderId = snapshot.docs[0].id;
+
     if (event.event === "payment.captured" || event.event === "order.paid") {
       const paymentId = event.payload?.payment?.entity?.id || null;
       await orderRef.update({
@@ -43,7 +46,8 @@ export async function POST(request: Request) {
     }
 
     if (event.event === "payment.failed") {
-      await orderRef.update({ paymentStatus: "failed" });
+      await orderRef.update({ paymentStatus: "failed", orderStatus: "cancelled" });
+      await releaseInventory(db, internalOrderId);
     }
 
     return NextResponse.json({ ok: true });

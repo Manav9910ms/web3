@@ -1,6 +1,6 @@
 import { type DocumentData } from "firebase-admin/firestore";
 import { demoProducts } from "./demo-products";
-import { getAdminDb } from "./firebase-admin";
+import { getAdminDb, getFirebaseAdminStatus } from "./firebase-admin";
 import type { Product } from "./types";
 
 function normalizeProduct(id: string, data: DocumentData): Product {
@@ -28,13 +28,25 @@ function normalizeProduct(id: string, data: DocumentData): Product {
 
 export async function getCatalog(options?: { includeInactive?: boolean }) {
   const db = getAdminDb();
-  if (!db) return demoProducts;
 
-  const snapshot = await db.collection("products").get();
-  if (snapshot.empty) return demoProducts;
+  if (!db) {
+    return demoProducts;
+  }
 
-  const products = snapshot.docs.map((doc) => normalizeProduct(doc.id, doc.data()));
-  return options?.includeInactive ? products : products.filter((product) => product.active);
+  try {
+    const snapshot = await db.collection("products").get();
+
+    if (snapshot.empty) return demoProducts;
+
+    const products = snapshot.docs.map((doc) => normalizeProduct(doc.id, doc.data()));
+    return options?.includeInactive ? products : products.filter((product) => product.active);
+  } catch (error) {
+    console.error("MYSHOP_CATALOG_READ_FAILED", {
+      message: error instanceof Error ? error.message : String(error),
+      firebaseAdmin: getFirebaseAdminStatus()
+    });
+    return demoProducts;
+  }
 }
 
 export async function getProductBySlug(slug: string) {

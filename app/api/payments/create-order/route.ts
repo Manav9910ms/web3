@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { demoProducts } from "../../../../lib/demo-products";
 import { getAdminDb, optionalUser } from "../../../../lib/firebase-admin";
 import { calculateTotal, getShippingFee, roundMoney } from "../../../../lib/pricing";
+import { reserveInventory } from "../../../../lib/inventory";
 import type { CustomerInfo } from "../../../../lib/types";
 import { randomUUID } from "crypto";
 
@@ -22,6 +23,9 @@ function validCustomer(customer: CustomerInfo) {
 }
 
 export async function POST(request: Request) {
+  let internalOrderId = "";
+  let reservedDb: ReturnType<typeof getAdminDb> = null;
+
   try {
     const body = await request.json();
     const requestedItems = Array.isArray(body.items) ? body.items : [];
@@ -38,7 +42,7 @@ export async function POST(request: Request) {
     const db = getAdminDb();
     const sourceProducts = db ? await db.collection("products").get() : null;
 
-    const productMap = new Map<string, any>();
+    const productMap = new Map<string, Record<string, any>>();
     if (sourceProducts && !sourceProducts.empty) {
       sourceProducts.docs.forEach(doc => productMap.set(doc.id, { id: doc.id, ...doc.data() }));
     } else {
@@ -76,7 +80,7 @@ export async function POST(request: Request) {
 
     const shippingFee = getShippingFee(subtotal);
     const total = calculateTotal(subtotal);
-    const internalOrderId = "MS-" + randomUUID().slice(0, 8).toUpperCase();
+    internalOrderId = "MS-" + randomUUID().slice(0, 8).toUpperCase();
 
     const safeCustomer = {
       userId: user?.uid || null,
@@ -100,6 +104,8 @@ export async function POST(request: Request) {
       currency: "INR",
       paymentStatus: "pending",
       orderStatus: "pending_payment",
+      inventoryReserved: false,
+      inventoryReleased: false,
       createdAt: FieldValue.serverTimestamp()
     };
 
@@ -119,13 +125,13 @@ export async function POST(request: Request) {
     });
 
     if (!db || !process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-      localStorageSafe();
       return NextResponse.json({
         mode: "demo",
         order: { id: internalOrderId, ...orderData, createdAt: new Date().toISOString() }
       });
     }
 
+    reservedDb = db;
     await db.collection("orders").doc(internalOrderId).set(orderData);
     await db.collection("order_finance").doc(internalOrderId).set({
       orderId: internalOrderId,
@@ -134,6 +140,11 @@ export async function POST(request: Request) {
       estimatedGrossProfit: roundMoney(financeItems.reduce((sum, item) => sum + item.estimatedGrossProfit, 0) - shippingFee),
       createdAt: FieldValue.serverTimestamp()
     });
+
+    await reserveInventory(db, internalOrderId, items.map(item => ({
+      productId: item.productId,
+      quantity: item.quantity
+    })));
 
     const authorization = "Basic " + Buffer.from(
       String(process.env.RAZORPAY_KEY_ID) + ":" + String(process.env.RAZORPAY_KEY_SECRET)
@@ -153,15 +164,12 @@ export async function POST(request: Request) {
 
     const razorpayPayload = await razorpayResponse.json();
     if (!razorpayResponse.ok) {
-      await db.collection("orders").doc(internalOrderId).update({
-        paymentStatus: "failed"
-      });
+      await db.collection("orders").doc(internalOrderId).update({ paymentStatus: "failed", orderStatus: "cancelled" });
+      await releaseInventory(db, internalOrderId);
       return NextResponse.json({ error: razorpayPayload.error?.description || "Razorpay order creation failed." }, { status: 502 });
     }
 
-    await db.collection("orders").doc(internalOrderId).update({
-      razorpayOrderId: razorpayPayload.id
-    });
+    await db.collection("orders").doc(internalOrderId).update({ razorpayOrderId: razorpayPayload.id });
 
     return NextResponse.json({
       mode: "live",
@@ -172,10 +180,13 @@ export async function POST(request: Request) {
       internalOrderId
     });
   } catch (error) {
+    if (reservedDb && internalOrderId) {
+      try {
+        await reservedDb.collection("orders").doc(internalOrderId).update({ paymentStatus: "failed", orderStatus: "cancelled" });
+        const { releaseInventory } = await import("../../../../lib/inventory");
+        await releaseInventory(reservedDb, internalOrderId);
+      } catch {}
+    }
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not create checkout." }, { status: 500 });
   }
-}
-
-function localStorageSafe() {
-  // Demo mode is intentionally non-persistent; configure Firebase Admin + Razorpay for real orders.
 }

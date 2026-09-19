@@ -1,25 +1,44 @@
-import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getAuth, type Auth } from "firebase-admin/auth";
 
-const serverConfigured = Boolean(
-  process.env.FIREBASE_ADMIN_PROJECT_ID &&
-  process.env.FIREBASE_ADMIN_CLIENT_EMAIL &&
-  process.env.FIREBASE_ADMIN_PRIVATE_KEY
-);
+function getEnv(name: string) {
+  const value = process.env[name];
+  return value?.trim() ? value.trim() : "";
+}
 
-function getAdminApp() {
+const projectId = getEnv("FIREBASE_ADMIN_PROJECT_ID");
+const clientEmail = getEnv("FIREBASE_ADMIN_CLIENT_EMAIL");
+const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.trim() || "";
+
+const serverConfigured = Boolean(projectId && clientEmail && privateKey);
+
+let cachedApp: App | null = null;
+let initError: string | null = null;
+
+function getAdminApp(): App | null {
   if (!serverConfigured) return null;
+  if (cachedApp) return cachedApp;
 
-  if (getApps().length) return getApps()[0];
+  try {
+    const normalizedPrivateKey = privateKey.replace(/\\n/g, "\n");
 
-  return initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY!.replace(/\\n/g, "\n")
-    })
-  });
+    cachedApp = getApps().length
+      ? getApps()[0]
+      : initializeApp({
+          credential: cert({
+            projectId,
+            clientEmail,
+            privateKey: normalizedPrivateKey
+          })
+        });
+
+    initError = null;
+    return cachedApp;
+  } catch (error) {
+    initError = error instanceof Error ? error.message : "Firebase Admin initialization failed.";
+    return null;
+  }
 }
 
 export function getAdminDb(): Firestore | null {
@@ -32,12 +51,21 @@ export function getAdminAuth(): Auth | null {
   return app ? getAuth(app) : null;
 }
 
+export function getFirebaseAdminStatus() {
+  getAdminApp();
+  return {
+    configured: serverConfigured,
+    initialized: Boolean(cachedApp),
+    error: initError
+  };
+}
+
 export async function requireAdmin(request: Request) {
   const auth = getAdminAuth();
   const db = getAdminDb();
 
   if (!auth || !db) {
-    throw new Error("Server Firebase Admin credentials are not configured.");
+    throw new Error(initError || "Server Firebase Admin credentials are not configured.");
   }
 
   const header = request.headers.get("authorization");

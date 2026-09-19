@@ -1,8 +1,9 @@
+import { type DocumentData } from "firebase-admin/firestore";
 import { demoProducts } from "./demo-products";
 import { getAdminDb } from "./firebase-admin";
 import type { Product } from "./types";
 
-function normalizeProduct(id: string, data: FirebaseFirestore.DocumentData): Product {
+function normalizeProduct(id: string, data: DocumentData): Product {
   return {
     id,
     slug: String(data.slug || id),

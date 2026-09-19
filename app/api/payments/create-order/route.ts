@@ -3,7 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { demoProducts } from "../../../../lib/demo-products";
 import { getAdminDb, optionalUser } from "../../../../lib/firebase-admin";
 import { calculateTotal, getShippingFee, roundMoney } from "../../../../lib/pricing";
-import { reserveInventory } from "../../../../lib/inventory";
+import { reserveInventory, releaseInventory } from "../../../../lib/inventory";
 import type { CustomerInfo } from "../../../../lib/types";
 import { randomUUID } from "crypto";
 
@@ -141,10 +141,7 @@ export async function POST(request: Request) {
       createdAt: FieldValue.serverTimestamp()
     });
 
-    await reserveInventory(db, internalOrderId, items.map(item => ({
-      productId: item.productId,
-      quantity: item.quantity
-    })));
+    await reserveInventory(db, internalOrderId, items.map(item => ({ productId: item.productId, quantity: item.quantity })));
 
     const authorization = "Basic " + Buffer.from(
       String(process.env.RAZORPAY_KEY_ID) + ":" + String(process.env.RAZORPAY_KEY_SECRET)
@@ -183,7 +180,6 @@ export async function POST(request: Request) {
     if (reservedDb && internalOrderId) {
       try {
         await reservedDb.collection("orders").doc(internalOrderId).update({ paymentStatus: "failed", orderStatus: "cancelled" });
-        const { releaseInventory } = await import("../../../../lib/inventory");
         await releaseInventory(reservedDb, internalOrderId);
       } catch {}
     }

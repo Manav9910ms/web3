@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const db = getAdminDb();
-    if (!db || !process.env.RAZORPAY_KEY_SECRET) {
+    if (!db || !process.env.RAZORPAY_KEY_SECRET || !process.env.RAZORPAY_KEY_ID) {
       return NextResponse.json({ error: "Payment verification is not configured." }, { status: 503 });
     }
 
@@ -28,6 +28,9 @@ export async function POST(request: Request) {
     const order = orderSnap.data()!;
     if (order.razorpayOrderId !== razorpayOrderId) {
       return NextResponse.json({ error: "Payment order mismatch." }, { status: 400 });
+    }
+    if (order.orderStatus === "cancelled") {
+      return NextResponse.json({ error: "This order has been cancelled." }, { status: 409 });
     }
 
     const digest = createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -52,11 +55,9 @@ export async function POST(request: Request) {
     if (!paymentResponse.ok) {
       return NextResponse.json({ error: "Could not verify payment status with Razorpay." }, { status: 502 });
     }
-
     if (payment.order_id !== razorpayOrderId) {
       return NextResponse.json({ error: "Payment does not belong to this order." }, { status: 400 });
     }
-
     if (payment.status !== "captured") {
       return NextResponse.json({ error: "Payment is not captured yet. The webhook will reconcile its final state." }, { status: 409 });
     }

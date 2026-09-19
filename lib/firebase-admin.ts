@@ -21,15 +21,13 @@ function getAdminApp(): App | null {
   if (cachedApp) return cachedApp;
 
   try {
-    const normalizedPrivateKey = privateKey.replace(/\\n/g, "\n");
-
     cachedApp = getApps().length
       ? getApps()[0]
       : initializeApp({
           credential: cert({
             projectId,
             clientEmail,
-            privateKey: normalizedPrivateKey
+            privateKey: privateKey.replace(/\\n/g, "\n")
           })
         });
 
@@ -53,11 +51,7 @@ export function getAdminAuth(): Auth | null {
 
 export function getFirebaseAdminStatus() {
   getAdminApp();
-  return {
-    configured: serverConfigured,
-    initialized: Boolean(cachedApp),
-    error: initError
-  };
+  return { configured: serverConfigured, initialized: Boolean(cachedApp), error: initError };
 }
 
 export async function requireAdmin(request: Request) {
@@ -70,7 +64,6 @@ export async function requireAdmin(request: Request) {
 
   const header = request.headers.get("authorization");
   const token = header?.startsWith("Bearer ") ? header.slice(7) : "";
-
   if (!token) throw new Error("Authentication required.");
 
   const decoded = await auth.verifyIdToken(token);

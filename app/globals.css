@@ -54,7 +54,7 @@ a { color:inherit; text-decoration:none; }
 .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; }
 .card { background:var(--surface); border:1px solid var(--line); border-radius:20px; box-shadow:0 4px 18px rgba(17,24,39,.04); overflow:hidden; }
 .product-card { display:flex; flex-direction:column; min-height:100%; }
-.product-art { aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#eef0ff,#f8f9fd); font-size:72px; }
+.product-art { aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#eef0ff,#f8f9fd); background-size:cover; background-position:center; font-size:72px; position:relative; } .product-art.has-image { background-color:#eef0ff; } .product-art.has-image span { position:absolute; inset:0; background:linear-gradient(to top,rgba(0,0,0,.08),transparent 45%); }
 .product-body { padding:17px; display:flex; flex-direction:column; flex:1; }
 .product-body h3 { margin:9px 0 7px; font-size:18px; letter-spacing:-.02em; }
 .product-body p { margin:0; color:var(--muted); font-size:13px; line-height:1.55; }
@@ -63,7 +63,7 @@ a { color:inherit; text-decoration:none; }
 .old-price { color:#9a9dab; text-decoration:line-through; font-size:13px; margin-left:5px; }
 .product-page { padding:50px 0; }
 .product-detail { display:grid; grid-template-columns:.9fr 1.1fr; gap:42px; }
-.product-large-art { min-height:540px; border-radius:28px; background:linear-gradient(145deg,#e7e9ff,#fafafa); display:flex; align-items:center; justify-content:center; font-size:145px; box-shadow:var(--shadow); }
+.product-large-art { min-height:540px; border-radius:28px; background:linear-gradient(145deg,#e7e9ff,#fafafa); background-size:cover; background-position:center; display:flex; align-items:center; justify-content:center; font-size:145px; box-shadow:var(--shadow); } .product-large-art.has-image { background-color:#e7e9ff; }
 .product-info h1 { font-size:52px; letter-spacing:-.055em; line-height:1; margin:13px 0; }
 .product-info .description { color:var(--muted); font-size:16px; line-height:1.75; max-width:620px; }
 .info-row { display:flex; flex-wrap:wrap; gap:8px; margin:20px 0; }

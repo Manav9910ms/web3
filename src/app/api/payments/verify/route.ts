@@ -2,7 +2,7 @@ import {NextRequest,NextResponse} from "next/server";
 import {getRequestUser} from "@/lib/auth/server";
 import {getAdminDb,isFirebaseAdminConfigured} from "@/lib/firebase/admin";
 import {getRazorpayPayment,requestFullRefund,verifyCheckoutSignature} from "@/lib/razorpay";
-import {finalizePaidOrder} from "@/lib/order-service";
+import {dispatchNotificationsForOrder,finalizePaidOrder} from "@/lib/order-service";
 export async function POST(req:NextRequest){
  const user=await getRequestUser(req);if(!user)return NextResponse.json({error:"Sign in again to verify payment."},{status:401});if(!isFirebaseAdminConfigured())return NextResponse.json({error:"Payment verification is not configured."},{status:503});
  let b:any;try{b=await req.json();}catch{return NextResponse.json({error:"Invalid payment response."},{status:400});}

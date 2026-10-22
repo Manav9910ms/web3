@@ -4,7 +4,7 @@ import {getRequestUser} from "@/lib/auth/server";
 import {getAdminDb,isFirebaseAdminConfigured} from "@/lib/firebase/admin";
 import {createRazorpayOrder} from "@/lib/razorpay";
 import {getShopSettings,getNextDeliveryDate,formatDate} from "@/lib/shop";
-import {releaseReservation} from "@/lib/order-service";
+import {cleanupExpiredReservations,releaseReservation} from "@/lib/order-service";
 export const dynamic="force-dynamic";
 export async function GET(req:NextRequest){
  const user=await getRequestUser(req);if(!user)return NextResponse.json({error:"Sign in to view orders."},{status:401});if(!isFirebaseAdminConfigured())return NextResponse.json({error:"Order storage is not configured."},{status:503});
@@ -19,8 +19,7 @@ export async function POST(req:NextRequest){
  if(!name||!address.line1||!address.city||!address.state||!/^\d{6}$/.test(address.pincode))return NextResponse.json({error:"Enter your name and a complete address with a valid 6-digit PIN."},{status:400});
  const s=await getShopSettings();if(!s.ordersEnabled)return NextResponse.json({error:"Shop has paused orders."},{status:409});if(!s.deliveryPincodes.length)return NextResponse.json({error:"Delivery PIN codes are not configured yet."},{status:409});if(!s.deliveryPincodes.includes(address.pincode))return NextResponse.json({error:"Delivery is not available for this PIN code."},{status:422});
  const db=getAdminDb(),ref=db.collection("orders").doc(),id=ref.id,date=getNextDeliveryDate(new Date(),s),batchRef=db.collection("deliveryBatches").doc(date),refs=Array.from(qty.keys()).map(pid=>db.collection("products").doc(pid));let subtotal=0,items:Array<Record<string,unknown>>=[];
- try{
-  await db.runTransaction(async tx=>{
+ try{await cleanupExpiredReservations();await db.runTransaction(async tx=>{
    const [batch,...products]=await Promise.all([tx.get(batchRef),...refs.map(r=>tx.get(r))]);const count=Number(batch.data()?.activeOrders||0);if(count>=s.maxOrdersPerDeliveryDate)throw new Error("Saturday delivery capacity is full. Please try the following week.");
    subtotal=0;items=[];products.forEach((snap,i)=>{if(!snap.exists)throw new Error("A product no longer exists.");const d=snap.data()!,pid=snap.id,n=qty.get(pid)||0,stock=Math.max(0,Number(d.stockOnHand||0)),reserved=Math.max(0,Number(d.reservedStock||0));if(d.isActive!==true)throw new Error(String(d.name||"Product")+" is unavailable.");if(stock-reserved<n)throw new Error("Only "+Math.max(0,stock-reserved)+" of "+String(d.name||"this product")+" remain.");const price=Number(d.pricePaise);if(!Number.isSafeInteger(price)||price<1)throw new Error("A product price is invalid.");const line=price*n;subtotal+=line;items.push({productId:pid,name:String(d.name||""),slug:String(d.slug||pid),imageUrl:String(d.imageUrl||""),quantity:n,unitLabel:String(d.unitLabel||"piece"),unitPricePaise:price,lineTotalPaise:line});tx.update(refs[i],{reservedStock:reserved+n,updatedAt:FieldValue.serverTimestamp()});});
    if(!Number.isSafeInteger(subtotal))throw new Error("Order amount is invalid.");if(subtotal<s.minOrderPaise)throw new Error("Minimum basket is Rs. "+(s.minOrderPaise/100).toFixed(2)+".");const total=subtotal+s.deliveryFeePaise;if(!Number.isSafeInteger(total)||total<1)throw new Error("Total amount is invalid.");

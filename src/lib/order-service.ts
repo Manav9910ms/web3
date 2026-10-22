@@ -27,3 +27,21 @@ export async function finalizePaidOrder(id:string,paymentId:string):Promise<"pai
   return "paid";
  });
 }
+
+export async function cleanupExpiredReservations(): Promise<number> {
+  const db = getAdminDb();
+  const pending = await db.collection("orders").where("status", "==", "payment_pending").limit(100).get();
+  let released = 0;
+  for (const doc of pending.docs) {
+    const expiry = doc.data().reservationExpiresAt as Timestamp | undefined;
+    if (expiry && expiry.toMillis() <= Date.now()) {
+      try {
+        await releaseReservation(doc.id, "Payment window expired");
+        released += 1;
+      } catch (error) {
+        console.error("Could not release expired reservation", doc.id, error);
+      }
+    }
+  }
+  return released;
+}

@@ -1,0 +1,23 @@
+import {FieldValue} from "firebase-admin/firestore";
+import {NextRequest,NextResponse} from "next/server";
+import {requireAdmin} from "@/lib/auth/server";
+import {getAdminDb} from "@/lib/firebase/admin";
+export const dynamic="force-dynamic";
+function slugify(v:string){return v.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,70);}
+export async function GET(req:NextRequest){const g=await requireAdmin(req);if(g.response)return g.response;const snap=await getAdminDb().collection("products").get();const products=snap.docs.map(doc=>{const d=doc.data(),stock=Math.max(0,Number(d.stockOnHand||0)),reserved=Math.max(0,Number(d.reservedStock||0));return {...d,id:doc.id,stockOnHand:stock,reservedStock:reserved,availableStock:Math.max(0,stock-reserved),pricePaise:Number(d.pricePaise||0)};}).sort((a,b)=>String(a.name).localeCompare(String(b.name)));return NextResponse.json({products},{headers:{"Cache-Control":"no-store"}});}
+export async function POST(req:NextRequest){
+ const g=await requireAdmin(req);if(g.response)return g.response;let b:any;try{b=await req.json();}catch{return NextResponse.json({error:"Invalid product data."},{status:400});}
+ const name=String(b.name||"").trim().slice(0,120),category=String(b.category||"").trim().slice(0,80),price=Number(b.pricePaise),stock=Number(b.stockOnHand),low=Number(b.lowStockThreshold||0),image=String(b.imageUrl||"").trim().slice(0,1000);
+ if(!name||!category||!Number.isSafeInteger(price)||price<1||!Number.isInteger(stock)||stock<0||!Number.isInteger(low)||low<0)return NextResponse.json({error:"Enter name, category, valid price and non-negative whole-number stock."},{status:400});if(image&&!/^https:\/\//i.test(image))return NextResponse.json({error:"Image URL must use HTTPS."},{status:400});
+ const db=getAdminDb(),ref=db.collection("products").doc(),slug=slugify(name)||ref.id;await ref.set({name,slug:slug+"-"+ref.id.slice(-5),category,description:String(b.description||"").trim().slice(0,1200),pricePaise:price,stockOnHand:stock,reservedStock:0,lowStockThreshold:low,unitLabel:String(b.unitLabel||"piece").trim().slice(0,40),imageUrl:image,isActive:b.isActive!==false,createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),createdBy:g.user!.uid,updatedBy:g.user!.uid});
+ await db.collection("inventoryMovements").add({productId:ref.id,type:"initial_stock",quantityDelta:stock,actorUid:g.user!.uid,createdAt:FieldValue.serverTimestamp()});return NextResponse.json({id:ref.id,ok:true},{status:201});
+}
+export async function PATCH(req:NextRequest){
+ const g=await requireAdmin(req);if(g.response)return g.response;const id=req.nextUrl.searchParams.get("id")||"";if(!id)return NextResponse.json({error:"Product ID is required."},{status:400});let b:any;try{b=await req.json();}catch{return NextResponse.json({error:"Invalid product data."},{status:400});}
+ const name=String(b.name||"").trim().slice(0,120),category=String(b.category||"").trim().slice(0,80),price=Number(b.pricePaise),stock=Number(b.stockOnHand),low=Number(b.lowStockThreshold||0),image=String(b.imageUrl||"").trim().slice(0,1000);
+ if(!name||!category||!Number.isSafeInteger(price)||price<1||!Number.isInteger(stock)||stock<0||!Number.isInteger(low)||low<0)return NextResponse.json({error:"Enter name, category, valid price and non-negative whole-number stock."},{status:400});if(image&&!/^https:\/\//i.test(image))return NextResponse.json({error:"Image URL must use HTTPS."},{status:400});
+ const db=getAdminDb(),ref=db.collection("products").doc(id);let old=0;
+ try{await db.runTransaction(async tx=>{const snap=await tx.get(ref);if(!snap.exists)throw new Error("Product not found.");const d=snap.data()!;old=Number(d.stockOnHand||0);if(stock<Number(d.reservedStock||0))throw new Error("Stock cannot be lower than quantity reserved for unpaid checkouts.");tx.update(ref,{name,slug:slugify(name)+"-"+id.slice(-5),category,description:String(b.description||"").trim().slice(0,1200),pricePaise:price,stockOnHand:stock,lowStockThreshold:low,unitLabel:String(b.unitLabel||"piece").trim().slice(0,40),imageUrl:image,isActive:b.isActive===true,updatedAt:FieldValue.serverTimestamp(),updatedBy:g.user!.uid});});}
+ catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Could not update product."},{status:409});}
+ if(old!==stock)await db.collection("inventoryMovements").add({productId:id,type:"stock_adjustment",quantityDelta:stock-old,oldStock:old,newStock:stock,actorUid:g.user!.uid,createdAt:FieldValue.serverTimestamp()});return NextResponse.json({ok:true});
+}

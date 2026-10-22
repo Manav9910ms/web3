@@ -1,0 +1,7 @@
+"use client";
+import Link from "next/link";
+import {useState} from "react";
+import type {Product} from "@/lib/types";
+import {useCart} from "@/lib/cart-context";
+export function formatPrice(paise:number){return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:2}).format(paise/100);}
+export function ProductCard({product:p}:{product:Product}){const c=useCart(),[added,setAdded]=useState(false),out=p.availableStock<=0;return <article className="product-card"><Link href={"/products/"+encodeURIComponent(p.slug)} className="product-photo">{p.imageUrl?<img src={p.imageUrl} alt={p.name} loading="lazy"/>:<span className="photo-fallback">MY<br/>SHOP</span>}{out?<span className="sold-out-pill">Sold out</span>:p.availableStock<=3?<span className="stock-pill">Only {p.availableStock} left</span>:null}</Link><div className="product-card-body"><span className="product-category">{p.category||"Shop essentials"}</span><Link href={"/products/"+encodeURIComponent(p.slug)} className="product-name">{p.name}</Link><div className="product-meta"><strong>{formatPrice(p.pricePaise)}</strong> / {p.unitLabel}</div><button className={"button add-button"+(added?" added":"")} disabled={out} onClick={()=>{c.addItem(p);setAdded(true);window.setTimeout(()=>setAdded(false),1100);}}>{out?"Out of stock":added?"Added ✓":"+ Add to cart"}</button></div></article>;}

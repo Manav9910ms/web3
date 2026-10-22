@@ -1,0 +1,4 @@
+"use client";
+import Link from "next/link";
+import {useCart} from "@/lib/cart-context";
+export function SiteHeader(){const c=useCart();return <header className="site-header"><div className="header-inner"><Link href="/" className="brand" aria-label="MyShop home"><span className="brand-mark">m</span><span>myshop<span className="brand-dot">.</span><small>YOUR LOCAL STORE</small></span></Link><nav className="desktop-nav"><Link href="/">Shop</Link><Link href="/my-orders">My orders</Link><Link href="/admin">Shop admin</Link></nav><div className="header-actions"><Link href="/cart" className="cart-link" aria-label={"Cart, "+c.count+" items"}><span className="cart-symbol">▱</span><span className="cart-label">Cart</span><span className="cart-count">{c.count}</span></Link><Link href="/login" className="account-link">Sign in ↗</Link></div></div></header>;}

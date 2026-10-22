@@ -1,0 +1,5 @@
+import {NextRequest,NextResponse} from "next/server";
+import {requireAdmin} from "@/lib/auth/server";
+import {getAdminDb} from "@/lib/firebase/admin";
+export const dynamic="force-dynamic";
+export async function GET(req:NextRequest){const g=await requireAdmin(req);if(g.response)return g.response;const snap=await getAdminDb().collection("orders").limit(200).get();const orders=snap.docs.map(doc=>{const d=doc.data();return {id:doc.id,orderNumber:d.orderNumber,customerName:d.customerName,customerPhone:d.customerPhone,address:d.address,items:d.items||[],totalPaise:d.totalPaise,deliveryDate:d.deliveryDate,status:d.status,paymentStatus:d.paymentStatus,fulfillmentStatus:d.fulfillmentStatus,createdAt:d.createdAt&&typeof d.createdAt.toDate==="function"?d.createdAt.toDate().toISOString():null};}).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));return NextResponse.json({orders},{headers:{"Cache-Control":"no-store"}});}

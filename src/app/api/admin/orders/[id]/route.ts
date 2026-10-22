@@ -1,0 +1,7 @@
+import {FieldValue} from "firebase-admin/firestore";
+import {NextRequest,NextResponse} from "next/server";
+import {requireAdmin} from "@/lib/auth/server";
+import {getAdminDb} from "@/lib/firebase/admin";
+const allowed=new Set(["confirmed","preparing","out_for_delivery","delivered"]);
+export async function PATCH(req:NextRequest,ctx:{params:Promise<{id:string}>}){const g=await requireAdmin(req);if(g.response)return g.response;const {id}=await ctx.params;let b:any;try{b=await req.json();}catch{return NextResponse.json({error:"Invalid update."},{status:400});}const next=String(b.fulfillmentStatus||"");if(!allowed.has(next))return NextResponse.json({error:"Invalid fulfillment status."},{status:400});const db=getAdminDb(),ref=db.collection("orders").doc(id);
+ try{await db.runTransaction(async tx=>{const snap=await tx.get(ref);if(!snap.exists)throw new Error("Order not found.");const d=snap.data()!;if(d.paymentStatus!=="paid")throw new Error("Only paid orders can be prepared or delivered.");const rank:Record<string,number>={confirmed:0,preparing:1,out_for_delivery:2,delivered:3},current=String(d.fulfillmentStatus||"confirmed");if(rank[next]<rank[current])throw new Error("Fulfillment status cannot move backwards.");tx.update(ref,{fulfillmentStatus:next,status:next,deliveredAt:next==="delivered"?FieldValue.serverTimestamp():(d.deliveredAt||null),updatedAt:FieldValue.serverTimestamp(),updatedBy:g.user!.uid});});return NextResponse.json({ok:true});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Unable to update order."},{status:409});}}

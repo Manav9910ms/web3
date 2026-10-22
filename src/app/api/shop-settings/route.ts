@@ -1,0 +1,5 @@
+import {NextResponse} from "next/server";
+import {getShopSettings,getNextDeliveryDate,formatDate} from "@/lib/shop";
+import {isFirebaseAdminConfigured} from "@/lib/firebase/admin";
+export const dynamic="force-dynamic";
+export async function GET(){const s=await getShopSettings(),date=getNextDeliveryDate(new Date(),s),checkoutEnabled=isFirebaseAdminConfigured()&&s.ordersEnabled&&s.deliveryPincodes.length>0&&Boolean(process.env.RAZORPAY_KEY_ID&&process.env.RAZORPAY_KEY_SECRET);return NextResponse.json({settings:{shopName:s.shopName,timezone:s.timezone,cutoffHour:s.cutoffHour,cutoffMinute:s.cutoffMinute,deliveryFeePaise:s.deliveryFeePaise,minOrderPaise:s.minOrderPaise,deliveryPincodes:s.deliveryPincodes,maxOrdersPerDeliveryDate:s.maxOrdersPerDeliveryDate},nextDeliveryDate:formatDate(date,s.timezone),checkoutEnabled},{headers:{"Cache-Control":"no-store"}});}

@@ -1,0 +1,14 @@
+import {NextRequest,NextResponse} from "next/server";
+import {getRequestUser} from "@/lib/auth/server";
+import {getAdminDb,isFirebaseAdminConfigured} from "@/lib/firebase/admin";
+import {getRazorpayPayment,requestFullRefund,verifyCheckoutSignature} from "@/lib/razorpay";
+import {finalizePaidOrder} from "@/lib/order-service";
+export async function POST(req:NextRequest){
+ const user=await getRequestUser(req);if(!user)return NextResponse.json({error:"Sign in again to verify payment."},{status:401});if(!isFirebaseAdminConfigured())return NextResponse.json({error:"Payment verification is not configured."},{status:503});
+ let b:any;try{b=await req.json();}catch{return NextResponse.json({error:"Invalid payment response."},{status:400});}
+ const id=String(b.orderId||""),rz=String(b.razorpay_order_id||""),pid=String(b.razorpay_payment_id||""),sig=String(b.razorpay_signature||"");if(!id||!rz||!pid||!sig)return NextResponse.json({error:"Payment verification fields are missing."},{status:400});
+ const db=getAdminDb(),ref=db.collection("orders").doc(id),snap=await ref.get();if(!snap.exists)return NextResponse.json({error:"Order not found."},{status:404});const o=snap.data()!;if(o.uid!==user.uid)return NextResponse.json({error:"You cannot verify this order."},{status:403});if(o.paymentStatus==="paid")return NextResponse.json({ok:true,orderNumber:o.orderNumber});if(o.razorpayOrderId!==rz)return NextResponse.json({error:"Payment order does not match."},{status:400});if(!verifyCheckoutSignature(rz,pid,sig))return NextResponse.json({error:"Payment signature verification failed."},{status:400});
+ try{const p=await getRazorpayPayment(pid);if(p.order_id!==rz||p.amount!==Number(o.totalPaise)||p.currency!=="INR")return NextResponse.json({error:"Payment details do not match this order."},{status:400});if(p.status!=="captured")return NextResponse.json({error:"Payment is not captured yet. Check My orders shortly."},{status:202});
+  const result=await finalizePaidOrder(id,pid);if(result==="expired"){try{await requestFullRefund(pid,id);}catch(e){console.error("Manual refund reconciliation needed",id,e);}await ref.update({paymentStatus:"refund_required",razorpayPaymentId:pid,updatedAt:new Date()});return NextResponse.json({error:"Checkout reservation expired. A refund was requested; contact the shop if needed."},{status:409});}if(result==="not_found")return NextResponse.json({error:"Order not found."},{status:404});return NextResponse.json({ok:true,orderNumber:o.orderNumber});
+ }catch(e){console.error("Payment verification failed",id,e);return NextResponse.json({error:"Payment confirmation is pending. Check My orders before retrying."},{status:503});}
+}

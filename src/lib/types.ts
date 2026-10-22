@@ -1,0 +1,3 @@
+export type Product={id:string;name:string;slug:string;description:string;category:string;imageUrl:string;pricePaise:number;unitLabel:string;stockOnHand:number;reservedStock:number;availableStock:number;lowStockThreshold:number;isActive:boolean};
+export type CartLine={product:Pick<Product,"id"|"name"|"slug"|"imageUrl"|"pricePaise"|"unitLabel"|"availableStock">;quantity:number};
+export type ShopSettings={shopName:string;timezone:string;cutoffDayOfWeek:number;cutoffHour:number;cutoffMinute:number;deliveryDayOfWeek:number;deliveryPincodes:string[];deliveryFeePaise:number;minOrderPaise:number;ordersEnabled:boolean;maxOrdersPerDeliveryDate:number};

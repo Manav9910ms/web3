@@ -1,9 +1,0 @@
-.next/
-node_modules/
-.env
-.env.local
-.vercel/
-coverage/
-npm-debug.log*
-*.log
-.DS_Store

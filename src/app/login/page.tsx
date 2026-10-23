@@ -13,7 +13,7 @@ export default function LoginPage(){
   setError("");
   if(!isFirebaseClientConfigured||!auth){setError("Firebase is not configured. Check the NEXT_PUBLIC_FIREBASE settings in Vercel.");return;}
   setBusy(true);
-  try{await signInWithPopup(auth,new GoogleAuthProvider());}
+  try{const result=await signInWithPopup(auth,new GoogleAuthProvider());const response=await fetch("/api/users/sync",{method:"POST",headers:{Authorization:"Bearer "+await result.user.getIdToken()}});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"Signed in, but we could not save your user profile. Check Firebase Admin configuration in Vercel.");}
   catch(e){setError(e instanceof Error?e.message:"Google sign-in failed. Please try again.");}
   finally{setBusy(false);}
  }
